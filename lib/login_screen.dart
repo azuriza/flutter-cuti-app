@@ -15,6 +15,7 @@ class _LoginScreenState extends State<LoginScreen>
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool _obscurePassword = true; // Tambahkan ini di atas dalam State
+  bool _isLoading = false; // di atas, di dalam state
   String? error;
 
   DateTime? _lastBackPressed; // ← Tambahkan di sini
@@ -32,19 +33,23 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> login() async {
-    final response = await http.post(
-      Uri.parse('http://10.0.2.2:8000/api/login'),
-      // Uri.parse('http://192.168.1.82:8000/api/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': emailController.text,
-        'password': passwordController.text,
-      }),
-    );
+    setState(() {
+      _isLoading = true;
+      error = '';
+    });
 
-    if (response.statusCode == 200) {
+    try {
+      final response = await http.post(
+        Uri.parse('http://10.0.2.2:8000/api/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': emailController.text,
+          'password': passwordController.text,
+        }),
+      );
+
+      if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
-
         final user = responseData['user'];
 
         final prefs = await SharedPreferences.getInstance();
@@ -54,15 +59,25 @@ class _LoginScreenState extends State<LoginScreen>
         await prefs.setString('employeeid', user['employeeid']);
         await prefs.setString('email', user['email']);
 
-      if (context.mounted) {
-        Navigator.pushReplacementNamed(context, '/dashboard');
+        if (context.mounted) {
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      } else {
+        setState(() {
+          error = 'Login gagal. Cek email/password.';
+        });
       }
-    } else {
+    } catch (e) {
       setState(() {
-        error = 'Login gagal. Cek email/password.';
+        error = 'Terjadi kesalahan. Silakan coba lagi.';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -159,20 +174,29 @@ class _LoginScreenState extends State<LoginScreen>
                 // ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: login,
+                  onPressed: _isLoading ? null : login, // Disable saat loading
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white, // warna teks jadi putih
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                     elevation: 4,
                   ),
-                  child: const Text(
-                    "LOGIN",
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 16),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          "LOGIN",
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 16),
+                        ),
                 ),
                 const SizedBox(height: 32),
                 Center(
